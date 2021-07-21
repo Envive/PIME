@@ -18,11 +18,30 @@
 import json
 import sys
 import traceback
+import threading
 
 if __name__ == "__main__":
     sys.path.append('python3')
+    sys.path.append('site-packages')
+
 
 from serviceManager import textServiceMgr
+
+import envive_helper_ui as ui
+import os
+import platform
+import pyautogui
+import subprocess
+from datetime import datetime
+from envive_helper_python import HiddenWindow
+from pynput import mouse, keyboard
+from pynput.mouse import Controller
+from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineView
+from PyQt5.QtWebChannel import QWebChannel
 
 
 class Client(object):
@@ -57,9 +76,9 @@ class Client(object):
         # print(reply)
         return reply
 
-
-class Server(object):
+class Server(QObject):
     def __init__(self):
+        super().__init__()
         self.clients = {}
 
     def run(self):
@@ -112,8 +131,13 @@ class Server(object):
 
 
 def main():
-    server = Server()
-    server.run()
+    try:
+        app = QtWidgets.QApplication(sys.argv)
+        window = HiddenWindow(Server())
+        window.show()
+        sys.exit(app.exec_())
+    except Exception as e:
+        print(e)
 
 
 if __name__ == "__main__":
