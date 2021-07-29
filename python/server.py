@@ -18,7 +18,6 @@
 import json
 import sys
 import traceback
-import threading
 
 if __name__ == "__main__":
     sys.path.append('python3')
@@ -28,14 +27,11 @@ if __name__ == "__main__":
 from serviceManager import textServiceMgr
 
 import envive_helper_ui as ui
-import os
-import platform
-import pyautogui
-import subprocess
-from datetime import datetime
-from envive_helper_python import HiddenWindow
-from pynput import mouse, keyboard
-from pynput.mouse import Controller
+# import os
+# import platform
+# import subprocess
+# from datetime import datetime
+from envive_helper_python import HiddenWindow, SystemTrayIcon
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
@@ -74,9 +70,14 @@ class Client(object):
                 success = self.init(msg)
             reply["success"] = success
         # print(reply)
+        print(f'reply aadsdasds: {reply}')
         return reply
 
 class Server(QObject):
+# class Server(object):
+    value_changed = pyqtSignal(str)
+    user_input_terminated = pyqtSignal()
+
     def __init__(self):
         super().__init__()
         self.clients = {}
@@ -106,6 +107,20 @@ class Server(QObject):
                     ret = client.handleRequest(msg)
                     # Send the response to the client via stdout
                     # one response per line in the format "PIME_MSG|<client_id>|<json reply>"
+                    compositionString = ret.get('compositionString')
+                    commitString = ret.get('commitString')
+                    isInTerminated = ret.get('isInTerminated')
+
+                    if compositionString:
+                        print(f'User\'s compositionString: {compositionString}')
+                        self.value_changed.emit(compositionString)
+                    elif commitString:
+                        print(f'User\'s commitString: {commitString}')
+                        self.value_changed.emit(commitString)
+                    elif isInTerminated:
+                        print(f'User\'s isInTerminated: {isInTerminated}')
+                        self.user_input_terminated.emit()
+
                     reply_line = '|'.join(["PIME_MSG", client_id, json.dumps(ret, ensure_ascii=False)])
                     print(reply_line)
             except EOFError:
@@ -133,9 +148,17 @@ class Server(QObject):
 def main():
     try:
         app = QtWidgets.QApplication(sys.argv)
+
         window = HiddenWindow(Server())
         window.show()
+
+        tray_widget = QtWidgets.QWidget()
+        trayIcon = SystemTrayIcon(QIcon(r'icon.png'), tray_widget, window)
+        trayIcon.show()
+
         sys.exit(app.exec_())
+        # server = Server()
+        # server.run()
     except Exception as e:
         print(e)
 

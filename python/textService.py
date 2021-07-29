@@ -138,6 +138,8 @@ class TextService:
             reply["return"] = ret
         reply["success"] = success
         reply["seqNum"] = seqNum  # reply with sequence number added
+
+        print(f'reply in textService: {reply}')
         return reply
 
     # methods that should be implemented by derived classes
@@ -175,6 +177,7 @@ class TextService:
     def onCompositionTerminated(self, forced):
         self.commitString = ""
         self.compositionString = ""
+        self.currentReply["isInTerminated"] = True
 
     def onKeyboardStatusChanged(self, opened):
         pass

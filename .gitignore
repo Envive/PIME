@@ -7,10 +7,17 @@ installer/*.exe
 x64
 lib
 out
+
+
 python/.venv
+python/__pycache__
+python/input_methods/__pycache__/
+python/input_methods/meow/__pycache__/
 
 PIMETextService/Debug
 PIMETextService/PIMETextService.dir
+PIMETextService/*.rc
+PIMETextService/*.sln
 
 PIME.sln
 CMakeCache.txt

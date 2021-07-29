@@ -35,6 +35,12 @@ class HiddenWindow(QDialog):
             self.thread = QThread()
             self.sub_server = server
 
+            self.sub_server.value_changed.connect(self.main_window.payload.set_data_value)
+            self.sub_server.value_changed.connect(self.main_window.window_show)
+            self.sub_server.user_input_terminated.connect(self.main_window.payload.clear_data_value)
+            self.sub_server.user_input_terminated.connect(self.main_window.window_hide)
+            # self.sub_server.value_changed.connect(self.main_window.window_control)
+
             self.sub_server.moveToThread(self.thread)
             self.thread.started.connect(self.sub_server.run)
             print('connect server')
@@ -46,21 +52,25 @@ class HiddenWindow(QDialog):
     def create_new_window(self):
         if self.main_window is None:
             self.main_window = QtWindow(self)
+            # self.main_window.setAttribute(Qt.WA_ShowWithoutActivating)
         # set second window as modal, because MainWindow is QDialog/QWidget.
         self.setModal(True)
         self.main_window.show()
 
 
 class QtWindow(QDialog, ui.Ui_MainWindow):
+# class QtWindow(QMainWindow, ui.Ui_MainWindow):
 
     def __init__(self, *args, **kwargs):
         print('main window init')
         # super().__init__()
         super(QtWindow, self).__init__(*args, **kwargs)
+        
         self.setupUi(self)
         # self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
-        # self.mouse_controller = QtMouseController(self)
+        self.mouse_controller = QtMouseController(self)
         # self.keyborad_controller = QtKeyboardController(self)
 
         vbox = QVBoxLayout(self)
@@ -68,14 +78,15 @@ class QtWindow(QDialog, ui.Ui_MainWindow):
         # self.webEngineView.load(QUrl("http://localhost:8080/"))
         # self.webEngineView.load(QUrl("http://localhost:8080/#/dx/web-channel-demo?patientId=6839&patientVisitId=5395"))
         # self.webEngineView.load(QUrl("https://test7.envive.cn/"))
+
         self.webEngineView.load(QUrl("https://test7.envive.cn/#/dx/web-channel-demo?patientId=109&patientVisitId=3853"))
         vbox.addWidget(self.webEngineView)
         self.web_layout.addLayout(vbox)
 
-        # self.channel = QWebChannel()
-        # self.payload = QtData(self)
-        # self.channel.registerObject("QtData", self.payload)
-        # self.webEngineView.page().setWebChannel(self.channel)
+        self.channel = QWebChannel()
+        self.payload = QtData(self)
+        self.channel.registerObject("QtData", self.payload)
+        self.webEngineView.page().setWebChannel(self.channel)
 
         # self.mouse_detect_button.clicked.connect(self.show_mouse_position)
         # self.send_data_to_web_button.clicked.connect(self.send_data_to_web)
@@ -83,14 +94,19 @@ class QtWindow(QDialog, ui.Ui_MainWindow):
         # self.to_web_data_type.textChanged.connect(self.payload.set_data_type)
         # self.to_web_data_value.textChanged.connect(self.payload.set_data_value)
 
-        # self.qi = QInputMethodEvent()
+    def window_control(self, input_string):
+        if input_string:
+            self.window_show()
+        else:
+            self.window_hide()
 
     def window_show(self):
-        # self.raise_()
+        self.setGeometry(self.mouse_controller.position_x, self.mouse_controller.position_y, self.width(), self.height())
+        self.raise_()
         self.show()
 
     def window_hide(self):
-        self.hide()
+        self.hide() 
 
     def window_resize(self, width, height):
         self.resize(width, height)
@@ -102,13 +118,6 @@ class QtWindow(QDialog, ui.Ui_MainWindow):
         # self.move(position_x, position_y)
         self.current_input += key
         # self.payload.set_data_value(self.current_input)
-        print(self.current_input)
-        print('self.qi')
-        print(self.qi.__dict__)
-        print('self.qi.preeditString()')
-        print(self.qi.preeditString())
-        print('self.qi.commitString()')
-        print(self.qi.commitString())
 
     def show_mouse_position(self):
         position_x, position_y = self.mouse_controller.position
@@ -134,16 +143,19 @@ class QtWindow(QDialog, ui.Ui_MainWindow):
 
     def capture_screen_temp(self, mouse_button):
         self.current_input = ''
+        print(f'mouse_button press: {mouse_button}')
         if mouse_button == 'right':
-            self.payload.set_data_type('')
-            self.window_hide()
+            # self.payload.set_data_type('')
+            # self.window_hide()
+            self.window_show()
         else:
-            self.payload.set_data_type('cc')
+            # self.payload.set_data_type('cc')
             self.window_show()
 
     def send_data_to_web(self):
         js_code = 'CallJsByPyqt5()'
         self.webEngineView.page().runJavaScript(js_code)
+
 
 class QtMouseController(QWidget):
     left_mouse_clicked = pyqtSignal(str)
@@ -159,9 +171,9 @@ class QtMouseController(QWidget):
         self.listener = mouse.Listener(on_click=self.on_mouse_click)
         self.listener.start()
 
-        # self.left_mouse_clicked.connect(self.window.capture_sceen_temp)
-        # self.right_mouse_clicked.connect(self.window.capture_sreen_temp)
-        self.capture_screen_triggered.connect(self.window.capture_screen)
+        # self.left_mouse_clicked.connect(self.window.capture_screen_temp)
+        # self.right_mouse_clicked.connect(self.window.capture_screen_temp)
+        # self.capture_screen_triggered.connect(self.window.capture_screen)
 
     @pyqtSlot(object, result=object)
     def get_mouse_position(self):
@@ -171,15 +183,16 @@ class QtMouseController(QWidget):
         self.position_x = x
         self.position_y = y
 
-        if button == mouse.Button.left:
-            # print('{0} at {1}'.format('Pressed left' if pressed else 'Released', (x, y)))
-            self.left_mouse_clicked.emit('left')
-        elif button == mouse.Button.right:
-            self.right_mouse_clicked.emit('right')
-            # print('{0} at {1}'.format('Pressed right' if pressed else 'Released', (x, y)))
-            # self.capture_screen_triggered.emit(x, y)
+        # if button == mouse.Button.left:
+        #     # print('{0} at {1}'.format('Pressed left' if pressed else 'Released', (x, y)))
+        #     self.left_mouse_clicked.emit('left')
+        # elif button == mouse.Button.right:
+        #     self.right_mouse_clicked.emit('right')
+        #     # print('{0} at {1}'.format('Pressed right' if pressed else 'Released', (x, y)))
+        #     # self.capture_screen_triggered.emit(x, y)
 
     position = pyqtProperty(object, fget=get_mouse_position)
+
 
 class QtKeyboardController(QWidget):
     keyboard_pressed = pyqtSignal(str)
@@ -201,6 +214,7 @@ class QtKeyboardController(QWidget):
             print('error')
             print('Key {0} pressed'.format(key))
 
+
 class QtData(QWidget):
     valueChanged = pyqtSignal(str)
     window_resize = pyqtSignal(int, int)
@@ -208,7 +222,7 @@ class QtData(QWidget):
     def __init__(self, main_window):
         super().__init__()
         self.window = main_window
-        self.data_type = ''
+        self.data_type = 'CC'
         self.data_value = ''
         self.window_width, self.window_height = pyautogui.size()
 
@@ -236,10 +250,15 @@ class QtData(QWidget):
         self.valueChanged.emit(self.value)
 
     def set_data_value(self, data_value):
-        # print(f'dataValue: {data_value}')
+        print(f'dataValue: {data_value}')
         if self.data_value == data_value:
             return
         self.data_value = data_value
+        self.valueChanged.emit(self.value)
+
+    def clear_data_value(self):
+        print(f'dataValue clear')
+        self.data_value = ''
         self.valueChanged.emit(self.value)
 
     @pyqtSlot(int, int)
@@ -247,4 +266,22 @@ class QtData(QWidget):
         self.window_resize.emit(int(width), int(height))
 
     value = pyqtProperty(str, fget=get_pyqt_to_web_value, fset=set_pyqt_to_web_value)
+
+
+class SystemTrayIcon(QtWidgets.QSystemTrayIcon):
+
+    def __init__(self, icon, parent=None, window=None):
+        QtWidgets.QSystemTrayIcon.__init__(self, icon, parent)
+        menu = QtWidgets.QMenu(parent)
+        self.window = window
+        exitAction = menu.addAction("Exit", self.exit)
+        # hideAction = menu.addAction("Hide", self.hide)
+        # openAction = menu.addAction("open")
+        self.setContextMenu(menu)
+
+    def exit(self):
+        QCoreApplication.exit()
+
+    # def hide(self):
+    #     self.window.main_window.hide()
 
