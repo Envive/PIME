@@ -121,7 +121,8 @@ class Server(QObject):
                         print(f'User\'s isInTerminated: {isInTerminated}')
                         self.user_input_terminated.emit()
 
-                    reply_line = '|'.join(["PIME_MSG", client_id, json.dumps(ret, ensure_ascii=False)])
+                    # reply_line = '|'.join(["PIME_MSG", client_id, json.dumps(ret, ensure_ascii=False)])
+                    reply_line = '|'.join(["PIME_MSG", client_id, json.dumps(ret)])
                     print(reply_line)
             except EOFError:
                 # stop the server
