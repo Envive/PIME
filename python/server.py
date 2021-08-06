@@ -21,17 +21,12 @@ import traceback
 
 if __name__ == "__main__":
     sys.path.append('python3')
-    sys.path.append('site-packages')
 
 
 from serviceManager import textServiceMgr
 
-import envive_helper_ui as ui
-# import os
-# import platform
-# import subprocess
-# from datetime import datetime
-from envive_helper_python import HiddenWindow, SystemTrayIcon
+import envive_helper_python.envive_helper_ui as ui
+from envive_helper_python.envive_helper_python import HiddenWindow, SystemTrayIcon
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
@@ -119,7 +114,7 @@ class Server(QObject):
                         self.value_changed.emit(commitString)
                     elif isInTerminated:
                         print(f'User\'s isInTerminated: {isInTerminated}')
-                        self.user_input_terminated.emit()
+                        # self.user_input_terminated.emit()
 
                     # reply_line = '|'.join(["PIME_MSG", client_id, json.dumps(ret, ensure_ascii=False)])
                     reply_line = '|'.join(["PIME_MSG", client_id, json.dumps(ret)])
@@ -153,9 +148,8 @@ def main():
         window = HiddenWindow(Server())
         window.show()
 
-        tray_widget = QtWidgets.QWidget()
-        trayIcon = SystemTrayIcon(QIcon(r'icon.png'), tray_widget, window)
-        trayIcon.show()
+        # trayIcon = SystemTrayIcon(QIcon(r'envive_helper_python/icon.png'), window)
+        # trayIcon.show()
 
         sys.exit(app.exec_())
         # server = Server()

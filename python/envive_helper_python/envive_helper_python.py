@@ -1,5 +1,4 @@
 
-import envive_helper_ui as ui
 import json
 import os
 import platform
@@ -7,7 +6,8 @@ import pyautogui
 import subprocess
 import sys
 from datetime import datetime
-# from image_matcher import ImageMatcher
+from envive_helper_python.image_matcher import ImageMatcher
+from . import envive_helper_ui as ui
 from pynput import mouse, keyboard
 from pynput.mouse import Controller
 from PyQt5 import QtWidgets
@@ -31,6 +31,11 @@ class HiddenWindow(QDialog):
             super().__init__()
             self.main_window = None
             self.create_new_window()
+
+            self.tray_icon = SystemTrayIcon(QIcon(r'envive_helper_python/icon.png'), self)
+            self.tray_icon.show()
+
+            self.tray_icon.method_changed.connect(self.main_window.set_current_match_method)
 
             self.thread = QThread()
             self.sub_server = server
@@ -58,17 +63,28 @@ class HiddenWindow(QDialog):
         self.main_window.show()
 
 
-class QtWindow(QDialog, ui.Ui_MainWindow):
-# class QtWindow(QMainWindow, ui.Ui_MainWindow):
+# class QtWindow(QDialog, ui.Ui_MainWindow):
+class QtWindow(QMainWindow, ui.Ui_MainWindow):
+    RADIO_BUTTON_DICT = {
+        '主诉': 'cc',
+        '现病史': 'hpi',
+        '既往史': 'preExistingCondition',
+        '过敏史': 'allergiesHistory',
+        '查体': 'pe',
+        '辅助检查': 'exam',
+        '门诊初步诊断': 'assessment',
+        '处理': 'disposition',
+        '治疗': 'treament',
+    }
 
     def __init__(self, *args, **kwargs):
         print('main window init')
         # super().__init__()
         super(QtWindow, self).__init__(*args, **kwargs)
-        
+        self.current_match_method = 'Data'
+
         self.setupUi(self)
-        # self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        # self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
 
         self.mouse_controller = QtMouseController(self)
         # self.keyborad_controller = QtKeyboardController(self)
@@ -88,11 +104,34 @@ class QtWindow(QDialog, ui.Ui_MainWindow):
         self.channel.registerObject("QtData", self.payload)
         self.webEngineView.page().setWebChannel(self.channel)
 
-        # self.mouse_detect_button.clicked.connect(self.show_mouse_position)
-        # self.send_data_to_web_button.clicked.connect(self.send_data_to_web)
+        self.set_up_radio_ui(self)
 
-        # self.to_web_data_type.textChanged.connect(self.payload.set_data_type)
-        # self.to_web_data_value.textChanged.connect(self.payload.set_data_value)
+        # # self.mouse_detect_button.clicked.connect(self.show_mouse_position)
+        # # self.send_data_to_web_button.clicked.connect(self.send_data_to_web)
+
+    def set_up_radio_ui(self, main_window):
+        radio_button_text_list = list(self.RADIO_BUTTON_DICT.keys())
+        # radio_button_list[0].setChecked(True)
+
+        radio_button_layout = QHBoxLayout()
+
+        self.radio_button_group = QButtonGroup()
+
+        for index , radio_button_text in enumerate(radio_button_text_list):
+            radio_button = QRadioButton(radio_button_text)
+            if index == 0:
+                radio_button.setChecked(True)
+            radio_button_layout.addWidget(radio_button)
+            self.radio_button_group.addButton(radio_button, index)
+            radio_button.clicked.connect(self.radio_button_clicked)
+
+        self.radio_layout.addLayout(radio_button_layout)
+
+    def radio_button_clicked(self):
+        print(self.radio_button_group.checkedId())
+        checked_button_text = self.radio_button_group.checkedButton().text()
+        data_type = self.RADIO_BUTTON_DICT.get(checked_button_text)
+        self.payload.set_data_type(data_type)
 
     def window_control(self, input_string):
         if input_string:
@@ -118,11 +157,17 @@ class QtWindow(QDialog, ui.Ui_MainWindow):
         # self.move(position_x, position_y)
         self.current_input += key
         # self.payload.set_data_value(self.current_input)
-
-    def show_mouse_position(self):
-        position_x, position_y = self.mouse_controller.position
-        self.mouse_position_x_label.setText(f'X: {position_x}')
-        self.mouse_position_y_label.setText(f'Y: {position_y}')
+        
+    def set_current_match_method(self, method):
+        self.current_match_method = method
+        if self.current_match_method == 'User':
+            self.horizontalLayoutWidget.show()
+            self.verticalLayoutWidget.setGeometry(QRect(0, 70, 1121, 631))
+            self.resize(1118, 704)
+        else: 
+            self.verticalLayoutWidget.setGeometry(QRect(0, 0, 1121, 631))
+            self.horizontalLayoutWidget.hide()
+            self.resize(1118, 633)
 
     def capture_screen(self, position_x, position_y):
         print('Start Capture Screen.....')
@@ -135,11 +180,26 @@ class QtWindow(QDialog, ui.Ui_MainWindow):
         w, h = my_screenshot.size
         datetime_now = datetime.today().strftime('%Y%m%d-%H%M%S')
         my_screenshot_path = f'{dirname}/screenshots/CaptureScreen-{datetime_now}.png'
-        my_screenshot.save(my_screenshot_path)
+        my_screenshot.save(my_screenshot_path)                                
         print('Capture Screen Done')
-        # image_matcher = ImageMatcher(f'{dirname}/source')
-        # tags = image_matcher.match_image(position_x, position_y, my_screenshot_path)
-        # print(tags)
+
+        image_matcher = ImageMatcher(
+            source_path=f'{dirname}\source',
+            meta_path=f'{dirname}\source\meta.json'
+        )
+
+ 
+        if self.current_match_method == 'Image':
+            tags = image_matcher.match_image(position_x, position_y, my_screenshot_path)
+        else:
+            tags = image_matcher.match_by_meta(position_x, position_y)
+        print(tags)
+
+        if tags:
+            tag = tags[0]
+            self.payload.set_data_type(tag)
+            radio_index = list(self.RADIO_BUTTON_DICT.values()).index(tag)
+            self.radio_button_group.buttons()[radio_index].setChecked(True)
 
     def capture_screen_temp(self, mouse_button):
         self.current_input = ''
@@ -173,23 +233,24 @@ class QtMouseController(QWidget):
 
         # self.left_mouse_clicked.connect(self.window.capture_screen_temp)
         # self.right_mouse_clicked.connect(self.window.capture_screen_temp)
-        # self.capture_screen_triggered.connect(self.window.capture_screen)
+        self.capture_screen_triggered.connect(self.window.capture_screen)
 
     @pyqtSlot(object, result=object)
     def get_mouse_position(self):
         return (self.position_x, self.position_y)
 
     def on_mouse_click(self, x, y, button, pressed):
-        self.position_x = x
-        self.position_y = y
-
-        # if button == mouse.Button.left:
-        #     # print('{0} at {1}'.format('Pressed left' if pressed else 'Released', (x, y)))
-        #     self.left_mouse_clicked.emit('left')
-        # elif button == mouse.Button.right:
-        #     self.right_mouse_clicked.emit('right')
-        #     # print('{0} at {1}'.format('Pressed right' if pressed else 'Released', (x, y)))
-        #     # self.capture_screen_triggered.emit(x, y)
+        if pressed:
+            if button == mouse.Button.left:
+                self.position_x = x
+                self.position_y = y
+                print('{0} at {1}'.format('Pressed left' if pressed else 'Released', (x, y)))
+                # self.left_mouse_clicked.emit('left')
+            elif button == mouse.Button.right:
+                self.right_mouse_clicked.emit('right')
+                # print('{0} at {1}'.format('Pressed right' if pressed else 'Released', (x, y)))
+                if self.window.current_match_method != 'User':
+                    self.capture_screen_triggered.emit(self.position_x, self.position_y)
 
     position = pyqtProperty(object, fget=get_mouse_position)
 
@@ -268,19 +329,37 @@ class QtData(QWidget):
     value = pyqtProperty(str, fget=get_pyqt_to_web_value, fset=set_pyqt_to_web_value)
 
 
-class SystemTrayIcon(QtWidgets.QSystemTrayIcon):
+class SystemTrayIcon(QSystemTrayIcon):
+    method_changed = pyqtSignal(str)
 
-    def __init__(self, icon, parent=None, window=None):
-        QtWidgets.QSystemTrayIcon.__init__(self, icon, parent)
-        menu = QtWidgets.QMenu(parent)
-        self.window = window
-        exitAction = menu.addAction("Exit", self.exit)
+    def __init__(self, icon, parent=None):
+        QSystemTrayIcon.__init__(self, icon, parent)
+        menu = QMenu(parent)
+
+        match_menu = menu.addMenu('Match method')
+        match_group = QActionGroup(match_menu)
+        methods = ['Data', 'Image', 'User']
+        for method in methods:
+            action = QAction(f'Match by {method}', match_menu, checkable=True, checked=method==methods[0])
+            action.setData(method)
+            match_menu.addAction(action)
+            match_group.addAction(action)
+        match_group.setExclusive(True)
+        match_group.triggered.connect(self.image_method_changed)
+
+        exitAction = menu.addAction('Exit', self.exit)
+
         # hideAction = menu.addAction("Hide", self.hide)
         # openAction = menu.addAction("open")
         self.setContextMenu(menu)
 
     def exit(self):
         QCoreApplication.exit()
+
+    def image_method_changed(self, action):
+        print(action.text())
+        print(action.data())
+        self.method_changed.emit(action.data())
 
     # def hide(self):
     #     self.window.main_window.hide()

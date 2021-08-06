@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 from datetime import datetime
 
@@ -7,16 +8,18 @@ import imutils
 from imutils import contours
 from skimage.metrics import normalized_root_mse
 
-OUTPUT_DIR = 'output/'
+OUTPUT_DIR = 'envive_helper_python/output/'
 
-def _union(a,b):
+
+def _union(a, b):
     x = min(a[0], b[0])
     y = min(a[1], b[1])
     w = max(a[0]+a[2], b[0]+b[2]) - x
     h = max(a[1]+a[3], b[1]+b[3]) - y
     return [x, y, w, h]
 
-def _intersect(a,b):
+
+def _intersect(a, b):
     x = max(a[0], b[0])
     y = max(a[1], b[1])
     w = min(a[0]+a[2], b[0]+b[2]) - x
@@ -24,6 +27,7 @@ def _intersect(a,b):
     if h < 0:  # in original code :  if w < 0 or h < 0:
         return False
     return True
+
 
 def _group_rectangles(rec):
     """
@@ -50,9 +54,18 @@ def _group_rectangles(rec):
 
     return final
 
+
 class ImageMatcher():
-    def __init__(self, source_path):
-         self.source_path = source_path
+    def __init__(self, source_path=None, meta_path=None):
+        self.source_path = source_path
+        self.meta_obj = self.load_meta_json(meta_path)
+
+    def load_meta_json(self, meta_path=None):
+        meta_obj = {}
+        if meta_path:
+            with open(meta_path) as f:
+                meta_obj = json.loads(f.read())
+        return meta_obj
 
     def read_image(self, path):
         originalImage = cv2.imread(path)
@@ -135,17 +148,28 @@ class ImageMatcher():
             # print(min_error)
             if min_error < 0.7:
                 cv2.imwrite(os.path.join(OUTPUT_DIR, f'partial_image-{index}-{match_tag}-{min_error}.png'), partial_image)
-                if input_coordinate[0] >= x and input_coordinate[0] <= x+w and input_coordinate[1] >= y and input_coordinate[1] <= y+h:
+                if input_coordinate[1] >= y and input_coordinate[1] <= y+h:
                     match_tags.append(match_tag)
-
+        print('paaaaaaaaaaaath')
+        print((os.path.join(OUTPUT_DIR, f'partial_image-{index}-{match_tag}-{min_error}.png')))
         cv2.circle(tmp_image, input_coordinate, radius=0, color=(255, 0, 0), thickness=30)
         output_path = os.path.join(OUTPUT_DIR, f'{datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}_{"-".join(match_tags)}.png')
         cv2.imwrite(output_path, tmp_image)
         match_tags = list(set(match_tags))
         return match_tags
+    
+    def match_by_meta(self, position_x, position_y):
+        match_tags = []
+        for tag, meta in self.meta_obj.items():
+            if position_x >= meta['x'] and position_x <= meta['x'] + meta['w'] and position_y >= meta['y'] and position_y <= meta['y'] + meta['h']:
+                match_tags.append(tag)
+
+        return match_tags
 
 
 if __name__ == '__main__':
-    image_matcher = ImageMatcher('./source')
+    image_matcher = ImageMatcher(source_path='./source', meta_path='./source/meta.json')
     match_tags = image_matcher.match_image(322, 500, './screenshots/1.png')
+    print(match_tags)
+    match_tags = image_matcher.match_by_meta(322, 500)
     print(match_tags)
